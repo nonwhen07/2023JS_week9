@@ -13,7 +13,10 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/icon?family=Material+Icons"
     />
-    <link href="/path/to/c3.css" rel="stylesheet" />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.18/c3.css"
+      rel="stylesheet"
+    />
     <link href="/css/back.css" rel="stylesheet" />
   </head>
   <body>
@@ -32,7 +35,7 @@
       <div id="chart"></div>
     </section>
     <section class="wrap orderPage-list">
-      <a href="#" class="discardAllBtn">清除全部訂單</a>
+      <a href="#" class="discardAllBtn" onclick="deleAllOrders();">清除全部訂單</a>
       <div class="orderTableWrap">
         <table class="orderPage-table">
           <thead>
@@ -47,7 +50,7 @@
               <th>操作</th>
             </tr>
           </thead>
-          <tr>
+          <!-- <tr>
             <td>10088377474</td>
             <td>
               <p>小杰</p>
@@ -103,7 +106,7 @@
             <td>
               <input type="button" class="delSingleOrder-Btn" value="刪除" />
             </td>
-          </tr>
+          </tr> -->
         </table>
       </div>
     </section>
@@ -135,24 +138,184 @@
         menu.classList.remove("openMenu");
       }
 
+    
       const api_path = "goushs";
-      //https://livejs-api.hexschool.io/api/livejs/v1/customer/goushs/products
-      const api = `https://livejs-api.hexschool.io/api/livejs/v1/customer/${api_path}/carts`;
+      const token = "i0T3K2YLg6PFBZsuu4BkvMVJXQH3";
+      const headers = {
+        headers: {
+          Authorization: token,
+        }
+      };
+      const orderPage_table = document.querySelector(".orderPage-table");
+      let orderData = [];
+      let chartData = [];
 
-      let data;
+      getOrders();
 
-      getCarts();
-
-      function getCarts() {
+      function getOrders() {
+        let orders = [];
+        const api_function = "orders";
+        
         axios
-          .get(api)
-          .then(function (res) {
-            console.log(res.data);
-          })
-          .catch(function (error) {
-            console.log(error);
-          });
+            .get(
+              `https://livejs-api.hexschool.io/api/livejs/v1/admin/${api_path}/${api_function}`, headers
+            )
+            .then(function (res) {
+              orders = res.data.orders;
+              let productList = [];
+              let dataItem = `<thead>
+                <tr>
+                  <th>訂單編號</th>
+                  <th>聯絡人</th>
+                  <th>聯絡地址</th>
+                  <th>電子郵件</th>
+                  <th>訂單品項</th>
+                  <th>訂單日期</th>
+                  <th>訂單狀態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>`;
+
+              orders.forEach((item) => {
+                //因為一般 timestamp 取得的是秒數，但在 JavaScript 中要帶入的是毫秒，所以要 new Date(timestamp * 1000)：
+                let createdAt = new Date(item.createdAt * 1000).toISOString().split('T')[0];
+                let products = '';
+                let orderStatus = '';
+                item.products.forEach((product, idx) => {
+                  products += `${product.title} * ${product.quantity}`;
+                  if (idx !== item.products.length - 1){ 
+                    products += '<br/>'; 
+                  }
+                  for(i = 0; i < product.quantity; i++){
+                    productList.push(product.title);
+                  }
+                })
+
+                //console.log('item.products', item.products)
+
+                //orderStatus
+                if(item.paid) {
+                  orderStatus = `<a href="#"" >已處理</a>`;
+                }
+                else {
+                  orderStatus = `<a href="#" onclick="putOrder('${item.id}');" >未處理</a>`;
+                }
+
+                dataItem += `<tr>
+                    <td> ${item.id} </td>
+                    <td> ${item.user.name} </td>
+                    <td> ${item.user.address} </td>
+                    <td> ${item.user.email} </td>
+                    <td> ${products} </td>
+                    <td> ${createdAt} </td>
+                    <td class="orderStatus">
+                      ${orderStatus}
+                    </td>
+                    <td class="discardBtn">
+                      <input type="button" class="delSingleOrder-Btn" value="刪除" onclick="deleOrder('${item.id}');">
+                    </td>
+                </tr>`;
+              });
+
+              orderPage_table.innerHTML = dataItem;
+
+              renderList(productList);
+              renderC3();
+            })
+            .catch(function (error) {
+                console.log(error);
+            });
       }
+
+      function deleOrder(orderId) {
+        const api_function = "orders";
+        axios
+            .delete(
+              `https://livejs-api.hexschool.io/api/livejs/v1/admin/${api_path}/${api_function}/${orderId}`, headers
+            )
+            .then(function (res) {
+              getOrders();
+            })
+            .catch(function (error) {
+                console.log(error.message);
+            });
+      }
+
+      function deleAllOrders() {
+        const api_function = "orders";
+        axios
+            .delete(
+              `https://livejs-api.hexschool.io/api/livejs/v1/admin/${api_path}/${api_function}`, headers
+            )
+            .then(function (res) {
+              getOrders();
+            })
+            .catch(function (error) {
+                console.log(error.message);
+            });
+      }
+      // 修改訂單狀態 - 
+      function putOrder(ordersId) {
+        const api_function = "orders";
+        axios
+            .put(
+              `https://livejs-api.hexschool.io/api/livejs/v1/admin/${api_path}/${api_function}`, {
+                "data": {
+                  "id": ordersId,
+                  "paid": true
+                }
+              }, headers
+            )
+            .then(function (res) {
+              getOrders();
+            })
+            .catch(function (error) {
+                console.log(error.message);
+            });
+      }
+   
+      function renderC3(){
+        // C3.js
+        let chart = c3.generate({
+          bindto: "#chart", // HTML 元素綁定
+          data: {
+            type: "pie",
+            columns: chartData,
+          },
+        });
+
+        // let chart = c3.generate({
+        //   bindto: '#chart',
+        //   data: {
+        //     columns: chartData,
+        //     axes: {
+        //       data2: 'y2'
+        //     },
+        //     type: 'donut'
+        //   },
+        // });
+      }
+
+      function renderList(data) {
+        let toatlObj = {};
+        chartData = []; // 重置 chartData
+        data.forEach((item) => {
+          if(toatlObj[item] == undefined){
+            toatlObj[item] = 1
+          }
+          else {
+            toatlObj[item] += 1
+          }
+        });
+        let newData = Object.keys(toatlObj);
+        newData.forEach((item) => {
+          let ary = [];
+          ary.push(item);
+          ary.push(toatlObj[item]);
+          chartData.push(ary);
+        });
+      }
+    
     </script>
   </body>
 </html>
